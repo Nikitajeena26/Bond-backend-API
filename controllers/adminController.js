@@ -1,61 +1,61 @@
-const Admin = require("../models/adminModel");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
+// controllers/adminController.js
+import Admin from "../models/adminModel.js";
 
-// ---------------- REGISTER ADMIN ----------------
-exports.registerAdmin = async (req, res) => {
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import Student from "../models/Student.js";
+import Bond from "../models/Bond.js";
+import Internship from "../models/Internship.js";
+import Posting from "../models/Posting.js";
+
+// Register Admin
+export const registerAdmin = async (req, res) => {
     try {
         const { name, email, password } = req.body;
+        const existing = await Admin.findOne({ email });
+        if (existing) return res.status(400).json({ message: "Admin already exists" });
 
-        const existingAdmin = await Admin.findOne({ email });
-        if (existingAdmin) {
-            return res.status(400).json({ message: "Admin already exists" });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const admin = new Admin({
-            name,
-            email,
-            password: hashedPassword
-        });
-
-        await admin.save();
-
-        res.status(201).json({ message: "Admin registered successfully" });
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({ message: "Server error" });
+        const hashed = await bcrypt.hash(password, 10);
+        const admin = await Admin.create({ name, email, password: hashed });
+        res.status(201).json({ success: true, admin });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
 };
 
-// ---------------- LOGIN ADMIN ----------------
-exports.loginAdmin = async (req, res) => {
+// Login Admin
+export const loginAdmin = async (req, res) => {
     try {
         const { email, password } = req.body;
-
         const admin = await Admin.findOne({ email });
-        if (!admin) {
-            return res.status(404).json({ message: "Admin not found" });
-        }
+        if (!admin) return res.status(400).json({ message: "Invalid credentials" });
 
         const isMatch = await bcrypt.compare(password, admin.password);
-        if (!isMatch) {
-            return res.status(400).json({ message: "Invalid credentials" });
-        }
+        if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
-        const token = jwt.sign(
-            { id: admin._id },
-            process.env.JWT_SECRET,
-            { expiresIn: "1d" }
-        );
+        const token = jwt.sign({ id: admin._id, email: admin.email }, process.env.JWT_SECRET, {
+            expiresIn: "7d",
+        });
+
+        res.json({ success: true, token });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+// Dashboard
+export const adminDashboard = async (req, res) => {
+    try {
+        const studentCount = await Student.countDocuments();
+        const bondCount = await Bond.countDocuments();
+        const internshipCount = await Internship.countDocuments();
+        const postingCount = await Posting.countDocuments();
 
         res.json({
-            message: "Login successful",
-            token
+            success: true,
+            dashboard: { totalStudents: studentCount, totalBonds: bondCount, totalInternships: internshipCount, totalPostings: postingCount }
         });
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({ message: "Server error" });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
     }
 };
